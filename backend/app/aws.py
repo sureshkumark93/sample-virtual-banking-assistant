@@ -43,7 +43,7 @@ from pipecat.frames.frames import (
     TTSStartedFrame,
     TTSStoppedFrame,
     TTSTextFrame,
-    StartInterruptionFrame
+    StartInterruptionFrame      
 )
 from pipecat.processors.aggregators.llm_response import (
     LLMAssistantAggregatorParams,
@@ -919,58 +919,34 @@ class AWSNovaSonicLLMService(LLMService):
                 f"The LLM tried to call a function named '{function_name}', but there isn't a callback registered for that function."
             )
 
-async def _handle_content_end_event(self, event_json): 
 
-        if not self._content_being_received:  # should never happen 
+    async def _handle_content_end_event(self, event_json):
+        if not self._content_being_received:  # should never happen
+            return
+        content = self._content_being_received
 
-            return 
+        content_end = event_json["contentEnd"]
+        stop_reason = content_end["stopReason"]
 
-        content = self._content_being_received 
+        # Bookkeeping: clear current content being received
+        self._content_being_received = None
 
- 
-
-        content_end = event_json["contentEnd"] 
-
-        stop_reason = content_end["stopReason"] 
-
- 
-
-        # Bookkeeping: clear current content being received 
-
-        self._content_being_received = None 
-
- 
-
-        if content.role == Role.ASSISTANT: 
-
-            if content.type == ContentType.TEXT: 
-
-                # Ignore non-final text, and the "interrupted" message (which isn't meaningful text) 
-
-                if content.text_stage == TextStage.FINAL : 
-
-                    if stop_reason != "INTERRUPTED": 
-
-                        if self._assistant_is_responding: 
-
-                            # Text added to the ongoing assistant response 
-
-                            await self._report_assistant_response_text_added(content.text_content) 
-
-                    else: 
-
-                        await self.push_frame(StartInterruptionFrame()) 
-
-        elif content.role == Role.USER: 
-
-            if content.type == ContentType.TEXT: 
-
-                if content.text_stage == TextStage.FINAL: 
-
-                    # User transcription text added 
-
-                    await self._report_user_transcription_text_added(content.text_content)
-
+        if content.role == Role.ASSISTANT:
+            if content.type == ContentType.TEXT:
+                # Ignore non-final text, and the "interrupted" message (which isn't meaningful text)
+                if content.text_stage == TextStage.FINAL :
+                    if stop_reason != "INTERRUPTED":
+                        if self._assistant_is_responding:
+                            # Text added to the ongoing assistant response
+                            await self._report_assistant_response_text_added(content.text_content)
+                    else:
+                        await self.push_frame(StartInterruptionFrame())
+        elif content.role == Role.USER:
+            if content.type == ContentType.TEXT:
+                if content.text_stage == TextStage.FINAL:
+                    # User transcription text added
+                    await self._report_user_transcription_text_added(content.text_content)
+    
     async def _handle_completion_end_event(self, event_json):
         pass
 
